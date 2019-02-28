@@ -15,21 +15,29 @@ defmodule Todo.Database do
   end
 
   def child_spec(_) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, []},
-      type: :supervisor
-    }
+    :poolboy.child_spec(
+      __MODULE__,
+      [name: {:local, __MODULE__}, worker_module: Todo.DatabaseWorker, size: 3],
+      [@db_folder]
+    )
   end
 
   def get(key) do
-    choose_worker(key)
-    |> Todo.DatabaseWorker.get(key)
+    :poolboy.transaction(
+      __MODULE__,
+      fn worker_pid ->
+        Todo.DatabaseWorker.get(worker_pid, key)
+      end
+    )
   end
 
   def store(key, data) do
-    choose_worker(key)
-    |> Todo.DatabaseWorker.store(key, data)
+    :poolboy.transaction(
+      __MODULE__,
+      fn worker_pid ->
+        Todo.DatabaseWorker.store(worker_pid, key, data)
+      end
+    )
   end
 
   def choose_worker(key) do
